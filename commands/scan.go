@@ -154,13 +154,13 @@ func CrawlPage(target url.URL) (list.List, *[]Link, LinkStatus) {
 				for _, url := range urls {
 					if parsedURL, ok := ParseURL(url); ok {
 						link := CheckLink(&target, parsedURL)
+						fmt.Printf("\t%s\n", link.URL.String())
+						jww.DEBUG.Printf("checked %v", link.URL.String())
 						if !link.IsExternal() {
 							jww.DEBUG.Printf("adding to queue %v", link.URL.String())
 							internalUrls.PushBack(link.URL.String())
-						} else {
-							jww.DEBUG.Printf("checked %v", link.URL.String())
-							checkedLinks = append(checkedLinks, link)
 						}
+						checkedLinks = append(checkedLinks, link)
 					} else {
 						jww.DEBUG.Printf("skipping %s", parsedURL.String())
 					}
@@ -217,8 +217,8 @@ func newScan() *cobra.Command {
 				nextURL := urlQueue.Front()
 
 				if parsedURL, ok := ParseURL(nextURL.Value.(string)); ok {
-					fmt.Printf("[%d]: Crawling %s\n", urlQueue.Len(), parsedURL.String())
 					if !IsCrawled(&crawledUrls, parsedURL.String()) {
+						fmt.Printf("[%d]: Crawling %s\n", urlQueue.Len(), parsedURL.String())
 						if newUrls, checkedLinks, status := CrawlPage(*parsedURL); status.IsOK() {
 							urlQueue.PushBackList(&newUrls)
 							crawledUrls = append(crawledUrls, parsedURL.String())
@@ -239,6 +239,7 @@ func newScan() *cobra.Command {
 					fmt.Printf("[%s] %s - %s\n", link.Src.String(), link.URL.String(), link.Status.String())
 				}
 			}
+			fmt.Printf("total links: %d", len(links))
 			return
 		},
 	}
