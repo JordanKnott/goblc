@@ -1,0 +1,11 @@
+bin
+dist
+vendor
+data
+goblc
+goblc.exe
+.bundle
+*.out
+tmp
+.vagrant
+*.log
