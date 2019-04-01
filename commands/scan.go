@@ -77,9 +77,24 @@ var Tags = map[int]map[string][]string{
 		"a":    []string{"href"},
 		"area": []string{"href"},
 	},
+	1: {
+		"a":        []string{"href"},
+		"area":     []string{"href"},
+		"audio":    []string{"src"},
+		"embed":    []string{"src"},
+		"iframe":   []string{"src"},
+		"img":      []string{"src"},
+		"input":    []string{"src"},
+		"menuitem": []string{"icon"},
+		"meta":     []string{"content"},
+		"object":   []string{"data"},
+		"source":   []string{"src"},
+		"track":    []string{"src"},
+		"video":    []string{"src"},
+	},
 }
 
-const level = 0
+const level = 1
 
 // GetLinks TODO
 func GetLinks(token html.Token) (urls []string) {
@@ -131,34 +146,39 @@ func CheckLink(src *url.URL, target *url.URL) Link {
 }
 
 // CrawlPage TODO
-func CrawlPage(target url.URL) (list.List, *[]Link, LinkStatus) {
-	resp, err := http.Get(target.String())
+func CrawlPage(currentPage url.URL) (list.List, *[]Link, error) {
+	jww.DEBUG.Printf("crawing page %s", currentPage.String())
+
+	resp, err := http.Get(currentPage.String())
 	if err != nil {
-		return list.List{}, &[]Link{}, LinkStatus{-1}
+		return list.List{}, &[]Link{}, err
 	}
 	tokenizer := html.NewTokenizer(resp.Body)
-	internalUrls := list.New()
+	addToQueue := list.New()
 	checkedLinks := []Link{}
 	for {
 		tokenType := tokenizer.Next()
 		switch {
-		case tokenType == html.ErrorToken:
+		case tokenType == html.ErrorToken: // End of the DOM
 			resp.Body.Close()
-			return *internalUrls, &checkedLinks, LinkStatus{200}
+			return *addToQueue, &checkedLinks, nil
+		case tokenType == html.SelfClosingTagToken:
+			fallthrough
 		case tokenType == html.StartTagToken:
 			token := tokenizer.Token()
 			isValid := IsValidElement(token.Data)
+			jww.DEBUG.Printf("token %v", token)
 
 			if isValid {
 				urls := GetLinks(token)
 				for _, url := range urls {
 					if parsedURL, ok := ParseURL(url); ok {
-						link := CheckLink(&target, parsedURL)
+						link := CheckLink(&currentPage, parsedURL)
 						fmt.Printf("\t%s\n", link.URL.String())
 						jww.DEBUG.Printf("checked %v", link.URL.String())
 						if !link.IsExternal() {
 							jww.DEBUG.Printf("adding to queue %v", link.URL.String())
-							internalUrls.PushBack(link.URL.String())
+							addToQueue.PushBack(link.URL.String())
 						}
 						checkedLinks = append(checkedLinks, link)
 					} else {
@@ -174,7 +194,7 @@ func CrawlPage(target url.URL) (list.List, *[]Link, LinkStatus) {
 func ParseURL(target string) (*url.URL, bool) {
 	urlTarget, err := url.Parse(target)
 	if err != nil {
-		panic(err)
+		return &url.URL{}, false
 	}
 	if !urlTarget.IsAbs() {
 		urlTarget = urlTarget.ResolveReference(PrimaryURL)
@@ -190,7 +210,7 @@ func ParseURL(target string) (*url.URL, bool) {
 	return urlTarget, true
 }
 
-// InCache TODO
+// IsCrawled TODO
 func IsCrawled(urlCache *[]string, target string) bool {
 	for _, url := range *urlCache {
 		if url == target {
@@ -219,13 +239,14 @@ func newScan() *cobra.Command {
 				if parsedURL, ok := ParseURL(nextURL.Value.(string)); ok {
 					if !IsCrawled(&crawledUrls, parsedURL.String()) {
 						fmt.Printf("[%d]: Crawling %s\n", urlQueue.Len(), parsedURL.String())
-						if newUrls, checkedLinks, status := CrawlPage(*parsedURL); status.IsOK() {
-							urlQueue.PushBackList(&newUrls)
-							crawledUrls = append(crawledUrls, parsedURL.String())
-							links = append(links, *checkedLinks...)
-						} else {
+						newUrls, checkedLinks, err := CrawlPage(*parsedURL)
+						if err != nil {
 							jww.WARN.Printf("error when attemptingt to crawl %s", parsedURL.String())
+							panic(err)
 						}
+						urlQueue.PushBackList(&newUrls)
+						crawledUrls = append(crawledUrls, parsedURL.String())
+						links = append(links, *checkedLinks...)
 					} else {
 						jww.DEBUG.Printf("already crawled %s", parsedURL.String())
 					}
@@ -239,7 +260,7 @@ func newScan() *cobra.Command {
 					fmt.Printf("[%s] %s - %s\n", link.Src.String(), link.URL.String(), link.Status.String())
 				}
 			}
-			fmt.Printf("total links: %d", len(links))
+			fmt.Printf("total links: %d\n", len(links))
 			return
 		},
 	}
