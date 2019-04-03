@@ -1,4 +1,4 @@
-baseurl = "http://localhost:3000"
+baseurl = "http://localhost:1313"
 title = "testing"
 
 theme = "hugo-coder"

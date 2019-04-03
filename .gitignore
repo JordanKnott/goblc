@@ -9,3 +9,4 @@ goblc.exe
 tmp
 .vagrant
 *.log
+test/site/public
